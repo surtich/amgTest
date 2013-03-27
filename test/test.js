@@ -7,7 +7,7 @@ event = require('./jsonEvents');
 
 console.log("Test Events " + util.inspect(event.stats));
 
-var NUM_EVENTS = 50000;
+var NUM_EVENTS = 100000;
 
 var clientMongo = null;
 var colMongoEvents = null;
@@ -122,9 +122,7 @@ function insertMongoEvent(p_cbk, uid, e) {
 }
 
 function insertRedisEvent(p_cbk, uid, e) {
- var event = extend({}, e);
- event.uid = String(uid);
- clientRedis.set(event.uid, JSON.stringify(event), p_cbk);
+ clientRedis.set(String(uid), e, p_cbk);
 }
 
 function insertRAMEvent(p_cbk, uid, e) {
@@ -193,7 +191,7 @@ async.series([
  },
  function(done) {
   removeEvents(done);
- },
+ }/*,
  function (done) {
   stats(insertMongoEventsSequential, "Inserted " + NUM_EVENTS + " small events in MongoDB sequential order", done, event.small);
  },
@@ -223,24 +221,24 @@ async.series([
  },
  function(done) {
   removeEvents(done);
- },
+ }*/,
  function(done) {
   addIndexMongo(done);
- },
+ }/*,
  function (done) {
   stats(insertMongoEventsSequential, "INDEXED: Inserted " + NUM_EVENTS + " big events in MongoDB sequential order", done, event.big);
  },
  function(done) {
   removeEvents(done);
- },
+ }*/,
  function (done) {
-  stats(insertMongoEventsParallel, "INDEXED: Inserted " + NUM_EVENTS + " big events in MongoDB parallel order", done, event.big);
- },
+  stats(insertMongoEventsParallel, "INDEXED: Inserted " + NUM_EVENTS + " small events in MongoDB parallel order", done, event.small);
+ }/*,
  function (done) {
   stats(getMongoEventsSequential, "INDEXED: Retreived " + NUM_EVENTS + " big events in MongoDB sequential order", done);
- },
+ }*/,
  function (done) {
-  stats(getMongoEventsParallel, "INDEXED: Retreived " + NUM_EVENTS + " big events in MongoDB parallel order", done);
+  stats(getMongoEventsParallel, "INDEXED: Retreived " + NUM_EVENTS + " small events in MongoDB parallel order", done);
  },
  function(done) {
   closeMongo(done);
@@ -249,13 +247,13 @@ async.series([
   connectRedis(done);
  },
  function(done) {
-  stats(insertRedisEvents, "Inserted " + NUM_EVENTS + " small events in Redis", done, event.small);
- },
+  stats(insertRedisEvents, "Inserted " + NUM_EVENTS + " small events in Redis", done, JSON.stringify(event.small));
+ }/*,
  function(done) {
   stats(insertRedisEvents, "Inserted " + NUM_EVENTS + " big events in Redis", done, event.big);
- },
+ }*/,
  function (done) {
-  stats(getRedisEvents, "Retreived " + NUM_EVENTS + " big events in Redis", done);
+  stats(getRedisEvents, "Retreived " + NUM_EVENTS + " small events in Redis", done);
  },
  function(done) {
   stats(insertRAMEvents, "Inserted " + NUM_EVENTS + " small events in RAM", done, event.small);
