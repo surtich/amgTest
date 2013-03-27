@@ -1,0 +1,20 @@
+{
+ "name": "agmTest",
+ "author": {
+  "name": "Javier Pérez",
+  "email": "surtich@gmail.com"
+ },
+ "version": "0.0.1",
+ "scripts": {
+  "start": "node src/shopping_app/app/main.js env=nodejitsu"
+ },
+ "dependencies": {
+  "mongodb": "1.2.x",
+  "redis"		: "0.8.2",
+  "node.extend"		: "1.0.x",
+  "async"		: "0.1.x"
+ },
+ "engines": {
+  "node": "0.8.x"
+ }
+}
