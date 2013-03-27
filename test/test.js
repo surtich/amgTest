@@ -3,7 +3,8 @@ redis	= require("redis"),
 async	= require("async"),
 util	= require("util"),
 extend	= require("node.extend"),
-event = require('./jsonEvents');
+event = require('./jsonEvents'),
+mysql = require('mysql');
 
 console.log("Test Events " + util.inspect(event.stats));
 
@@ -13,6 +14,8 @@ var clientMongo = null;
 var colMongoEvents = null;
 
 var clientRedis = null;
+
+var clientMySQL = null;
 
 var clientRAM = {};
 
@@ -38,6 +41,14 @@ function connectRedis(p_cbk) {
  });
 }
 
+function connectMySQL(p_cbk) {
+ clientMySQL = mysql.createPool({
+   host: 'localhost',
+   database: 'agm',
+   user: 'root'
+ });
+ p_cbk();
+}
 
 function addIndexMongo(p_cbk) {
  colMongoEvents.ensureIndex({
@@ -57,6 +68,11 @@ function closeMongo(p_cbk) {
 
 function closeRedis(p_cbk) {
  clientRedis.end();
+ p_cbk();
+}
+
+function closeMySQL(p_cbk) {
+ clientMySQL.end();
  p_cbk();
 }
 
@@ -101,13 +117,29 @@ function doParallel(fn, p_cbk, params) {
 }
 
 
-function removeEvents(p_cbk) {
+function removeMongoEvents(p_cbk) {
  colMongoEvents.remove({}, {
   w:1
  }, function(err, res){
   p_cbk(err);
  });
 }
+
+function removeRedisEvents(p_cbk) {
+ clientRedis.flushall( function (didSucceed) {
+  p_cbk();        
+ });
+}
+
+function removeMySQLEvents(p_cbk) {
+ clientMySQL.getConnection(function(err, connection) {
+  connection.query( 'DELETE FROM events', function(err, rows) {
+   connection.end();
+   p_cbk(err);
+  });
+ });
+}
+
 
 function insertMongoEvent(p_cbk, uid, e) {
  var event = extend({}, e);
@@ -124,6 +156,16 @@ function insertMongoEvent(p_cbk, uid, e) {
 function insertRedisEvent(p_cbk, uid, e) {
  clientRedis.set(String(uid), e, p_cbk);
 }
+
+function insertMySQLEvent(p_cbk, uid, e) {
+ clientMySQL.getConnection(function(err, connection) {
+  connection.query( 'INSERT INTO events SET ?', {uid: uid, value: e}, function(err, rows) {
+   connection.end();
+   p_cbk(err);
+  });
+ });
+}
+
 
 function insertRAMEvent(p_cbk, uid, e) {
  var event = extend({}, e);
@@ -150,6 +192,15 @@ function getRedisEvent(p_cbk, uid) {
 function getRAMEvent(p_cbk, uid) {
  var event = clientRAM[uid];
  p_cbk();
+}
+
+function getMySQLEvent(p_cbk, uid) {
+ clientMySQL.getConnection(function(err, connection) {
+  connection.query( 'SELECT * FROM events WHERE ?', {uid: uid}, function(err, results) {
+   connection.end();
+   p_cbk(err);
+  });
+ });
 }
 
 
@@ -185,12 +236,20 @@ function getRAMEvents(p_cbk) {
  doParallel(getRAMEvent, p_cbk);
 }
 
+function insertMySQLEvents(p_cbk, event) {
+ doParallel(insertMySQLEvent, p_cbk, event);
+}
+
+function getMySQLEvents(p_cbk) {
+ doParallel(getMySQLEvent, p_cbk);
+}
+
 async.series([
  function(done) {
   connectMongo(done);
  },
  function(done) {
-  removeEvents(done);
+  removeMongoEvents(done);
  }/*,
  function (done) {
   stats(insertMongoEventsSequential, "Inserted " + NUM_EVENTS + " small events in MongoDB sequential order", done, event.small);
@@ -202,13 +261,13 @@ async.series([
   stats(insertMongoEventsParallel, "Inserted " + NUM_EVENTS + " small events in MongoDB parallel order", done, event.small);
  },
  function(done) {
-  removeEvents(done);
+  removeMongoEvents(done);
  },
  function (done) {
   stats(insertMongoEventsSequential, "Inserted " + NUM_EVENTS + " big events in MongoDB sequential order", done, event.big);
  },
  function(done) {
-  removeEvents(done);
+  removeMongoEvents(done);
  },
  function (done) {
   stats(insertMongoEventsParallel, "Inserted " + NUM_EVENTS + " big events in MongoDB parallel order", done, event.big);
@@ -220,7 +279,7 @@ async.series([
   stats(getMongoEventsParallel, "Retreived " + NUM_EVENTS + " big events in MongoDB parallel order", done);
  },
  function(done) {
-  removeEvents(done);
+  removeMongoEvents(done);
  }*/,
  function(done) {
   addIndexMongo(done);
@@ -229,7 +288,7 @@ async.series([
   stats(insertMongoEventsSequential, "INDEXED: Inserted " + NUM_EVENTS + " big events in MongoDB sequential order", done, event.big);
  },
  function(done) {
-  removeEvents(done);
+  removeMongoEvents(done);
  }*/,
  function (done) {
   stats(insertMongoEventsParallel, "INDEXED: Inserted " + NUM_EVENTS + " small events in MongoDB parallel order", done, event.small);
@@ -247,6 +306,9 @@ async.series([
   connectRedis(done);
  },
  function(done) {
+  removeRedisEvents(done);
+ },
+ function(done) {
   stats(insertRedisEvents, "Inserted " + NUM_EVENTS + " small events in Redis", done, JSON.stringify(event.small));
  }/*,
  function(done) {
@@ -254,6 +316,9 @@ async.series([
  }*/,
  function (done) {
   stats(getRedisEvents, "Retreived " + NUM_EVENTS + " small events in Redis", done);
+ },
+ function(done) {
+  closeRedis(done);
  },
  function(done) {
   stats(insertRAMEvents, "Inserted " + NUM_EVENTS + " small events in RAM", done, event.small);
@@ -265,7 +330,19 @@ async.series([
   stats(getRAMEvents, "Retreived " + NUM_EVENTS + " big events in RAM", done);
  },
  function(done) {
-  closeRedis(done);
+  connectMySQL(done);
+ },
+ function(done) {
+  removeMySQLEvents(done);
+ },
+ function(done) {
+  stats(insertMySQLEvents, "Inserted " + NUM_EVENTS + " small events in MySQL", done, JSON.stringify(event.small));
+ },
+ function (done) {
+  stats(getMySQLEvents, "Retreived " + NUM_EVENTS + " small events in MySQL", done);
+ },
+ function(done) {
+  closeMySQL(done);
  }
  ]);
 

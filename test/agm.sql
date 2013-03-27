@@ -1,0 +1,10 @@
+DROP DATABASE IF EXISTS agm;
+CREATE DATABASE agm;
+USE agm;
+DROP TABLE IF EXISTS `events`;
+CREATE TABLE IF NOT EXISTS `events` (
+  `uid` int(11) NOT NULL,
+  `value` text NOT NULL,
+  PRIMARY KEY (`uid`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+

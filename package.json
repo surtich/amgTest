@@ -12,7 +12,8 @@
   "mongodb": "1.2.x",
   "redis"		: "0.8.2",
   "node.extend"		: "1.0.x",
-  "async"		: "0.1.x"
+  "async"		: "0.1.x",
+  "mysql"               :"2.0.0-alpha7"
  },
  "engines": {
   "node": "0.8.x"
