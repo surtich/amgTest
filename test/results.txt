@@ -1,0 +1,67 @@
+Test Events { small: { chars: 4326, fields: 229 },
+  big: { chars: 34207, fields: 1702 } }
+Inserted 10000 small events in MongoDB sequential order  12003ms
+Inserted 10000 small events in MongoDB parallel order  4024ms
+Inserted 10000 big events in MongoDB sequential order  55078ms
+Inserted 10000 big events in MongoDB parallel order  16520ms
+Retreived 10000 big events in MongoDB sequential order  115937ms
+Retreived 10000 big events in MongoDB parallel order  31222ms
+INDEXED: Inserted 10000 big events in MongoDB sequential order  57126ms
+INDEXED: Inserted 10000 big events in MongoDB parallel order  17179ms
+INDEXED: Retreived 10000 big events in MongoDB sequential order  21252ms
+INDEXED: Retreived 10000 big events in MongoDB parallel order  9357ms
+Inserted 10000 small events in Redis  1534ms
+Inserted 10000 big events in Redis  8878ms
+Retreived 10000 big events in Redis  4072ms
+Inserted 10000 small events in RAM  51ms
+Inserted 10000 big events in RAM  46ms
+Retreived 10000 big events in RAM  1ms
+
+
+Test Events { small: { chars: 4326, fields: 229 },
+  big: { chars: 34207, fields: 1702 } }
+Inserted 50000 small events in MongoDB sequential order  59216ms
+Inserted 50000 small events in MongoDB parallel order  27388ms
+Inserted 50000 big events in MongoDB sequential order  283006ms
+Inserted 50000 big events in MongoDB parallel order  179049ms
+...
+Interrumpido. Tarda muchísimo si los documentos no se indexan
+...
+INDEXED: Inserted 50000 big events in MongoDB parallel order  142687ms
+INDEXED: Retreived 50000 big events in MongoDB parallel order  53040ms
+Inserted 50000 small events in Redis  11003ms
+Inserted 50000 big events in Redis  48515ms
+Retreived 50000 big events in Redis  23621ms
+Inserted 50000 small events in RAM  286ms
+Inserted 50000 big events in RAM  287ms
+Retreived 50000 big events in RAM  3ms
+
+
+
+Test Events { small: { chars: 4326, fields: 229 },
+  big: { chars: 34207, fields: 1702 } }
+Inserted 100000 small events in MongoDB sequential order  114500ms
+Inserted 100000 small events in MongoDB parallel order  59202ms
+Inserted 100000 big events in MongoDB sequential order  430986ms
+Inserted 100000 big events in MongoDB parallel order  497432ms
+
+....
+Interrumpido después de media hora de esperar la recuperación de los 100000 eventos (sólo se habían recuperado 20000 eventos)
+....
+INDEXED: Inserted 100000 big events in MongoDB parallel order  368225ms
+INDEXED: Retreived 100000 big events in MongoDB parallel order  156194ms
+INDEXED: Inserted 100000 small events in MongoDB parallel order  55554ms
+INDEXED: Retreived 100000 small events in MongoDB parallel order  50867ms
+Inserted 100000 small events in Redis  14301ms
+Retreived 100000 small events in Redis  7060ms
+Inserted 100000 big events in Redis  97347ms
+Retreived 100000 big events in Redis  46514ms
+Inserted 100000 small events in RAM  606ms
+Inserted 100000 big events in RAM  593ms
+Retreived 100000 big events in RAM  15ms
+
+
+
+
+
+

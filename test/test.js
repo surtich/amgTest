@@ -7,7 +7,7 @@ event = require('./jsonEvents');
 
 console.log("Test Events " + util.inspect(event.stats));
 
-var NUM_EVENTS = 1000;
+var NUM_EVENTS = 50000;
 
 var clientMongo = null;
 var colMongoEvents = null;
@@ -18,15 +18,14 @@ var clientRAM = {};
 
 
 function connectMongo(p_cbk) {
- mongodb.Db.connect("mongodb://localhost/amg-database", {}, function(err, client) {
+ mongodb.Db.connect("mongodb://localhost/amg-database2", {}, function(err, client) {
   if(err) { 
    p_cbk(err);
   } else {
    clientMongo = client;
-   colMongoEvents = new mongodb.Collection(client, 'events');
    clientMongo.dropCollection("events", function(err, result) {
     colMongoEvents = new mongodb.Collection(client, 'events');
-    p_cbk(err);
+    p_cbk(null);
    });
   }
  });
@@ -141,7 +140,6 @@ function getMongoEvent(p_cbk, uid) {
  };
  
  colMongoEvents.findOne(find, function(err, res){
-  //console.log(res.uid)
   p_cbk(err, res);
  });
  
@@ -174,11 +172,11 @@ function getMongoEventsParallel(p_cbk) {
 }
 
 function insertRedisEvents(p_cbk, event) {
- doParallel(insertRedisEvent, p_cbk, event);
+ doSequential(insertRedisEvent, p_cbk, event);
 }
 
 function getRedisEvents(p_cbk) {
- doParallel(getRedisEvent, p_cbk);
+ doSequential(getRedisEvent, p_cbk);
 }
 
 function insertRAMEvents(p_cbk, event) {
