@@ -8,7 +8,8 @@ mysql = require('mysql');
 
 console.log("Test Events " + util.inspect(event.stats));
 
-var NUM_EVENTS = 100000;
+var numEvents = 5;
+var first = 1;
 
 var clientMongo = null;
 var colMongoEvents = null;
@@ -19,17 +20,46 @@ var clientMySQL = null;
 
 var clientRAM = {};
 
+function init(p_cbk) {
+ process.argv.forEach(
+  function (val, index, array) {
+   var param;
+   param = getParam("-num_events=", val);
+   if ( param !== null ) {
+    numEvents = parseInt(param, 10);
+   }
+   
+   param = getParam("-start=", val);
+   if ( param !== null ) {
+    first = parseInt(param, 10);
+   }
+  }
+  );
+ p_cbk();
+}
+
+function getParam (label, value) {
+ var idx = value.indexOf(label);
+ if ( idx > -1 ) {
+  return value.substring( idx + label.length );
+ }
+ return null;
+}
+
 
 function connectMongo(p_cbk) {
- mongodb.Db.connect("mongodb://localhost/amg-database2", {}, function(err, client) {
+ mongodb.Db.connect("mongodb://localhost/amg-database", {}, function(err, client) {
   if(err) { 
    p_cbk(err);
   } else {
    clientMongo = client;
-   clientMongo.dropCollection("events", function(err, result) {
+   colMongoEvents = new mongodb.Collection(client, 'events');
+   p_cbk(null);
+   
+   /*clientMongo.dropCollection("events", function(err, result) {
     colMongoEvents = new mongodb.Collection(client, 'events');
     p_cbk(null);
-   });
+   });*/
   }
  });
 }
@@ -43,9 +73,9 @@ function connectRedis(p_cbk) {
 
 function connectMySQL(p_cbk) {
  clientMySQL = mysql.createPool({
-   host: 'localhost',
-   database: 'agm',
-   user: 'root'
+  host: 'localhost',
+  database: 'agm',
+  user: 'root'
  });
  p_cbk();
 }
@@ -88,11 +118,11 @@ function stats(fn, label, p_cbk, params) {
 
 
 function doSequential(fn, p_cbk, params) {
- var i = 0;
+ var i = first - 1;
  async.whilst(
   function() {
    i++;
-   return i <= NUM_EVENTS;
+   return i < numEvents + first;
   },
   function(done) {
    fn(done, i, params);
@@ -103,12 +133,12 @@ function doSequential(fn, p_cbk, params) {
 }
 
 function doParallel(fn, p_cbk, params) {
- var i = 1;
+ var i = first;
  var count = 0;
- for (; i <= NUM_EVENTS; i++) {
+ for (; i < numEvents + first; i++) {
   fn(function() {
    count++;
-   if (count === NUM_EVENTS) {
+   if (count === numEvents) {
     p_cbk();
     return;
    }
@@ -144,10 +174,11 @@ function removeMySQLEvents(p_cbk) {
 function insertMongoEvent(p_cbk, uid, e) {
  var event = extend({}, e);
  event.uid = uid;
- colMongoEvents.insert(event, {
-  w:1
- }, function(err, res){
+ colMongoEvents.insert(event, {w: 1}, function(err, res){
   if (p_cbk) {
+   if (err) {
+    console.log("Error in insertMongoEvent: " + err)
+   }
    p_cbk(err);
   }
  });
@@ -159,7 +190,10 @@ function insertRedisEvent(p_cbk, uid, e) {
 
 function insertMySQLEvent(p_cbk, uid, e) {
  clientMySQL.getConnection(function(err, connection) {
-  connection.query( 'INSERT INTO events SET ?', {uid: uid, value: e}, function(err, rows) {
+  connection.query( 'INSERT INTO events SET ?', {
+   uid: uid, 
+   value: e
+  }, function(err, rows) {
    connection.end();
    p_cbk(err);
   });
@@ -196,7 +230,9 @@ function getRAMEvent(p_cbk, uid) {
 
 function getMySQLEvent(p_cbk, uid) {
  clientMySQL.getConnection(function(err, connection) {
-  connection.query( 'SELECT * FROM events WHERE ?', {uid: uid}, function(err, results) {
+  connection.query( 'SELECT * FROM events WHERE ?', {
+   uid: uid
+  }, function(err, results) {
    connection.end();
    p_cbk(err);
   });
@@ -246,59 +282,23 @@ function getMySQLEvents(p_cbk) {
 
 async.series([
  function(done) {
+  init(done);
+ },
+ function(done) {
   connectMongo(done);
- },
- function(done) {
-  removeMongoEvents(done);
  }/*,
- function (done) {
-  stats(insertMongoEventsSequential, "Inserted " + NUM_EVENTS + " small events in MongoDB sequential order", done, event.small);
- },
- function(done) {
-  removeEvents(done);
- },
- function (done) {
-  stats(insertMongoEventsParallel, "Inserted " + NUM_EVENTS + " small events in MongoDB parallel order", done, event.small);
- },
  function(done) {
   removeMongoEvents(done);
  },
- function (done) {
-  stats(insertMongoEventsSequential, "Inserted " + NUM_EVENTS + " big events in MongoDB sequential order", done, event.big);
- },
- function(done) {
-  removeMongoEvents(done);
- },
- function (done) {
-  stats(insertMongoEventsParallel, "Inserted " + NUM_EVENTS + " big events in MongoDB parallel order", done, event.big);
- },
- function (done) {
-  stats(getMongoEventsSequential, "Retreived " + NUM_EVENTS + " big events in MongoDB sequential order", done);
- },
- function (done) {
-  stats(getMongoEventsParallel, "Retreived " + NUM_EVENTS + " big events in MongoDB parallel order", done);
- },
- function(done) {
-  removeMongoEvents(done);
- }*/,
  function(done) {
   addIndexMongo(done);
- }/*,
- function (done) {
-  stats(insertMongoEventsSequential, "INDEXED: Inserted " + NUM_EVENTS + " big events in MongoDB sequential order", done, event.big);
  },
- function(done) {
-  removeMongoEvents(done);
+ function (done) {
+  stats(insertMongoEventsParallel, "INDEXED: Inserted " + numEvents + " small events in MongoDB parallel order", done, event.small);
  }*/,
  function (done) {
-  stats(insertMongoEventsParallel, "INDEXED: Inserted " + NUM_EVENTS + " small events in MongoDB parallel order", done, event.small);
+  stats(getMongoEventsParallel, "INDEXED: Retreived " + numEvents + " small events in MongoDB parallel order", done);
  }/*,
- function (done) {
-  stats(getMongoEventsSequential, "INDEXED: Retreived " + NUM_EVENTS + " big events in MongoDB sequential order", done);
- }*/,
- function (done) {
-  stats(getMongoEventsParallel, "INDEXED: Retreived " + NUM_EVENTS + " small events in MongoDB parallel order", done);
- },
  function(done) {
   closeMongo(done);
  },
@@ -309,25 +309,22 @@ async.series([
   removeRedisEvents(done);
  },
  function(done) {
-  stats(insertRedisEvents, "Inserted " + NUM_EVENTS + " small events in Redis", done, JSON.stringify(event.small));
- }/*,
- function(done) {
-  stats(insertRedisEvents, "Inserted " + NUM_EVENTS + " big events in Redis", done, event.big);
- }*/,
+  stats(insertRedisEvents, "Inserted " + numEvents + " small events in Redis", done, JSON.stringify(event.small));
+ },
  function (done) {
-  stats(getRedisEvents, "Retreived " + NUM_EVENTS + " small events in Redis", done);
+  stats(getRedisEvents, "Retreived " + numEvents + " small events in Redis", done);
  },
  function(done) {
   closeRedis(done);
  },
  function(done) {
-  stats(insertRAMEvents, "Inserted " + NUM_EVENTS + " small events in RAM", done, event.small);
+  stats(insertRAMEvents, "Inserted " + numEvents + " small events in RAM", done, event.small);
  },
  function(done) {
-  stats(insertRAMEvents, "Inserted " + NUM_EVENTS + " big events in RAM", done, event.big);
+  stats(insertRAMEvents, "Inserted " + numEvents + " big events in RAM", done, event.big);
  },
  function (done) {
-  stats(getRAMEvents, "Retreived " + NUM_EVENTS + " big events in RAM", done);
+  stats(getRAMEvents, "Retreived " + numEvents + " big events in RAM", done);
  },
  function(done) {
   connectMySQL(done);
@@ -336,14 +333,17 @@ async.series([
   removeMySQLEvents(done);
  },
  function(done) {
-  stats(insertMySQLEvents, "Inserted " + NUM_EVENTS + " small events in MySQL", done, JSON.stringify(event.small));
+  stats(insertMySQLEvents, "Inserted " + numEvents + " small events in MySQL", done, JSON.stringify(event.small));
  },
  function (done) {
-  stats(getMySQLEvents, "Retreived " + NUM_EVENTS + " small events in MySQL", done);
+  stats(getMySQLEvents, "Retreived " + numEvents + " small events in MySQL", done);
  },
  function(done) {
   closeMySQL(done);
- }
- ]);
-
-
+ }*/
+ ], function (err, results) {
+  if (err) {
+   console.log("EXIT WITH ERRORS: " + err);
+  }
+  return;
+ });

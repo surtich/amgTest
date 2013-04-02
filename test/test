@@ -1,0 +1,11 @@
+#!/bin/bash
+let numEvents=100000
+let start=1
+let tam=25000
+let i=$start
+while [ $i -le $numEvents ]
+do
+ echo $i
+ node test.js -num_events=$tam -start=$i &
+ let i+=$tam
+done
