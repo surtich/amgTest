@@ -4,11 +4,10 @@ async	= require("async"),
 util	= require("util"),
 extend	= require("node.extend"),
 event = require('./jsonEvents'),
-mysql = require('mysql');
+mysql = require('mysql'),
+cluster =require('cluster');
 
-console.log("Test Events " + util.inspect(event.stats));
-
-var numEvents = 5;
+var numEvents = 50000;
 var first = 1;
 
 var clientMongo = null;
@@ -19,6 +18,39 @@ var clientRedis = null;
 var clientMySQL = null;
 
 var clientRAM = {};
+
+var activeWorkers = 0;
+
+if (cluster.isMaster) {
+ init(function() {
+  var numCPUs = require('os').cpus().length;
+ 
+  // Fork workers. 
+  for (var i = 0; i < numCPUs; i++) {
+   var worker = cluster.fork({
+    numEvents: numEvents / numCPUs, 
+    first: first + i * numEvents / numCPUs
+   });
+  }
+ 
+  console.log("numCPUs = " + numCPUs);
+  console.log("Test Events " + util.inspect(event.stats));
+
+  cluster.on('exit', function(worker, code, signal) {
+   activeWorkers--;
+   if (activeWorkers === 0) {
+   }
+  });
+ 
+  cluster.on('fork', function(worker) {
+   activeWorkers++;
+  });
+ 
+ });
+ 
+} else {
+ jobs();
+}
 
 function init(p_cbk) {
  process.argv.forEach(
@@ -56,7 +88,7 @@ function connectMongo(p_cbk) {
    colMongoEvents = new mongodb.Collection(client, 'events');
    p_cbk(null);
    
-   /*clientMongo.dropCollection("events", function(err, result) {
+  /*clientMongo.dropCollection("events", function(err, result) {
     colMongoEvents = new mongodb.Collection(client, 'events');
     p_cbk(null);
    });*/
@@ -110,7 +142,9 @@ function stats(fn, label, p_cbk, params) {
  var start = new Date().getTime();
  fn (function () {
   var end = new Date().getTime();
-  console.log(label + "  " + (end - start) +"ms");
+  var duration = end - start;
+  var msg = label + "  " + duration +"ms";
+  console.log(msg);
   p_cbk();
  }, params);
  
@@ -118,14 +152,16 @@ function stats(fn, label, p_cbk, params) {
 
 
 function doSequential(fn, p_cbk, params) {
- var i = first - 1;
+ var i = parseInt(process.env.first, 10);
+ var num = parseInt(process.env.numEvents, 10);
+ var top = num + parseInt(process.env.first, 10);
  async.whilst(
   function() {
-   i++;
-   return i < numEvents + first;
+   return i < top;
   },
   function(done) {
    fn(done, i, params);
+   i++;
   },
   function(err) {
    p_cbk(err);
@@ -133,12 +169,14 @@ function doSequential(fn, p_cbk, params) {
 }
 
 function doParallel(fn, p_cbk, params) {
- var i = first;
+ var i = parseInt(process.env.first, 10);
+ var num = parseInt(process.env.numEvents, 10);
+ var max = num + i;
  var count = 0;
- for (; i < numEvents + first; i++) {
+ for (; i < max; i++) {
   fn(function() {
    count++;
-   if (count === numEvents) {
+   if (count === num) {
     p_cbk();
     return;
    }
@@ -174,7 +212,9 @@ function removeMySQLEvents(p_cbk) {
 function insertMongoEvent(p_cbk, uid, e) {
  var event = extend({}, e);
  event.uid = uid;
- colMongoEvents.insert(event, {w: 1}, function(err, res){
+ colMongoEvents.insert(event, {
+  w: 1
+ }, function(err, res){
   if (p_cbk) {
    if (err) {
     console.log("Error in insertMongoEvent: " + err)
@@ -280,28 +320,26 @@ function getMySQLEvents(p_cbk) {
  doParallel(getMySQLEvent, p_cbk);
 }
 
-async.series([
- function(done) {
-  init(done);
- },
- function(done) {
-  connectMongo(done);
- }/*,
+function jobs() {
+ async.series([
+  /*function(done) {
+   connectMongo(done);
+  },
  function(done) {
   removeMongoEvents(done);
  },
  function(done) {
   addIndexMongo(done);
  },
- function (done) {
-  stats(insertMongoEventsParallel, "INDEXED: Inserted " + numEvents + " small events in MongoDB parallel order", done, event.small);
- }*/,
- function (done) {
-  stats(getMongoEventsParallel, "INDEXED: Retreived " + numEvents + " small events in MongoDB parallel order", done);
- }/*,
- function(done) {
-  closeMongo(done);
- },
+  function (done) {
+   stats(insertMongoEventsParallel, "INDEXED: Inserted " + process.env.numEvents + " small events in MongoDB", done, event.small);
+  },
+  function (done) {
+   stats(getMongoEventsParallel, "INDEXED: Retreived " + process.env.numEvents + " small events in MongoDB parallel order", done);
+  },
+  function(done) {
+   closeMongo(done);
+  },
  function(done) {
   connectRedis(done);
  },
@@ -309,10 +347,10 @@ async.series([
   removeRedisEvents(done);
  },
  function(done) {
-  stats(insertRedisEvents, "Inserted " + numEvents + " small events in Redis", done, JSON.stringify(event.small));
+  stats(insertRedisEvents, "Inserted " + process.env.numEvents + " small events in Redis", done, JSON.stringify(event.small));
  },
  function (done) {
-  stats(getRedisEvents, "Retreived " + numEvents + " small events in Redis", done);
+  stats(getRedisEvents, "Retreived " + process.env.numEvents + " small events in Redis", done);
  },
  function(done) {
   closeRedis(done);
@@ -325,25 +363,33 @@ async.series([
  },
  function (done) {
   stats(getRAMEvents, "Retreived " + numEvents + " big events in RAM", done);
- },
- function(done) {
-  connectMySQL(done);
- },
+ },*/
+  function(done) {
+   connectMySQL(done);
+  }/*,
  function(done) {
   removeMySQLEvents(done);
- },
- function(done) {
-  stats(insertMySQLEvents, "Inserted " + numEvents + " small events in MySQL", done, JSON.stringify(event.small));
- },
- function (done) {
-  stats(getMySQLEvents, "Retreived " + numEvents + " small events in MySQL", done);
- },
- function(done) {
-  closeMySQL(done);
- }*/
- ], function (err, results) {
-  if (err) {
-   console.log("EXIT WITH ERRORS: " + err);
+ }*/,
+  function(done) {
+   stats(insertMySQLEvents, "Inserted " + process.env.numEvents + " small events in MySQL", done, JSON.stringify(event.small));
+  },
+  function (done) {
+   stats(getMySQLEvents, "Retreived " + process.env.numEvents + " small events in MySQL", done);
+  },
+  function(done) {
+   closeMySQL(done);
   }
-  return;
- });
+  ], function (err, results) {
+   if (err) {
+    console.log("EXIT WITH ERRORS: " + err);
+   }
+   if (cluster.worker.kill) {
+    cluster.worker.kill();
+   } else {
+    cluster.worker.destroy();
+   }
+   
+   return;
+  }); 
+}
+
