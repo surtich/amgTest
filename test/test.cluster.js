@@ -2,6 +2,7 @@ var cluster = require('cluster'),
 util = require('util');
 
 var activeWorkers = 0;
+var duration = -1;
 
 
 function work(settings) {
@@ -11,22 +12,25 @@ function work(settings) {
  if (cluster.isMaster) {
   var forks = settings.forks || require('os').cpus().length;
   console.log("forks="+forks);
-  var num = parseInt(settings.max / forks, 10);
+  var num = parseInt((settings.max - settings.first + 1) / forks, 10);
   for (var i = 0; i < forks ; i++) {
    var first = settings.first + i * num;
-   if (i === forks - 1 && settings.max % forks !== 0) {
-    num += settings.max % forks;
-   }
-   cluster.fork({
-    num: num + settings.max % forks,
+   var worker = cluster.fork({
+    num: i < forks - 1 ? num : num + (settings.max - settings.first + 1) % forks,
     first: first
+   });
+   worker.on('message', function(data) {
+    //console.log("pid=" + data.pid + ", duration=" + data.duration +"ms");
+    if (data.duration > duration) {
+	duration = data.duration;
+    }
    });
   }
   
   cluster.on('exit', function(worker, code, signal) {
    activeWorkers--;
-   console.log(worker.process);
    if (activeWorkers === 0) {
+    console.log("Task: " + settings.label+". Elements: " + (settings.max - settings.first + 1) + ". Max duration: " + duration + "ms");
     if (settings.cbk) {
      settings.cbk();
     }
@@ -44,17 +48,17 @@ function work(settings) {
   }
   
   var job = function(p_cbk) {
-   fn(settings.job, p_cbk)
-  }
+   fn(settings.job, function() {
+    if (cluster.worker.kill) {
+     cluster.worker.kill();
+    } else {
+     cluster.worker.destroy();
+    }
+    p_cbk();
+   }, settings.params);
+  };
   
-  stats(job, 'process.pid='+process.pid, function() {
-   if (cluster.worker.kill) {
-    cluster.worker.kill();
-   } else {
-    cluster.worker.destroy();
-   }
-  }
-  );
+  stats(job);
  }
 }
 
@@ -91,18 +95,14 @@ function doParallel(fn, p_cbk, params) {
  }
 }
 
-function stats(fn, label, p_cbk, params) {
+function stats(job) {
  var start = new Date().getTime();
- fn (function () {
+ job (function () {
   var end = new Date().getTime();
   var duration = end - start;
-  var msg = label + "  " + duration +"ms";
-  process.env.duration = duration;
-  console.log(msg);
-  p_cbk();
- }, params);
+  process.send({duration: duration, pid: process.pid});
+ });
 }
-
 
 module.exports = {
  work: work
