@@ -81,8 +81,7 @@ function init(p_cbk) {
    if ( param !== null ) {
     doMySQLTests = param.toLowerCase() === "yes";
    }
-
-
+   
   }
   );
  p_cbk();
@@ -166,8 +165,7 @@ function prepareMongoDB() {
  
  if (readTests) {
   jobs.push({
-   fn: mongoTest.getMongoEvent,
-   params: event.small
+   fn: mongoTest.getMongoEvent
   });
  }
  
@@ -193,8 +191,7 @@ function prepareRedis() {
  
  if (readTests) {
   jobs.push({
-   fn: redisTest.getRedisEvent,
-   params: JSON.stringify(event.small)
+   fn: redisTest.getRedisEvent
    //,multiplier: clusterTest.doSequential
   });
  }
@@ -220,8 +217,7 @@ function prepareMySQL() {
  
  if (readTests) {
   jobs.push({
-   fn: mysqlTest.getMySQLEvent,
-   params: JSON.stringify(event.small)
+   fn: mysqlTest.getMySQLEvent
   });
  }
  
