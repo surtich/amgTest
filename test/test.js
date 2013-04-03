@@ -26,8 +26,6 @@ var postJobs = [];
 
 tasks();
 
-
-
 function job(fns, p_cbk, label) {
  clusterTest.work({
   cbk: p_cbk, 
@@ -189,6 +187,7 @@ function prepareRedis() {
   jobs.push({
    fn: redisTest.insertRedisEvent,
    params: JSON.stringify(event.small)
+   //,multiplier: clusterTest.doSequential
   });
  }
  
@@ -196,6 +195,7 @@ function prepareRedis() {
   jobs.push({
    fn: redisTest.getRedisEvent,
    params: JSON.stringify(event.small)
+   //,multiplier: clusterTest.doSequential
   });
  }
  

@@ -46,9 +46,6 @@ function work(settings) {
   async.forEachSeries(settings.jobs, function(job, p_cbk) {   
      
    var fn = job.multiplier || doParallel;
-   if (job.isSequential) {
-    fn = doSequential;
-   }
 
    stats(job.fn.name, function(after) {
     fn(job.fn, function() {
@@ -113,5 +110,7 @@ function stats(key, job) {
 }
 
 module.exports = {
- work: work
+ work: work,
+ doSequential: doSequential,
+ doParallel: doParallel
 };
