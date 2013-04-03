@@ -10,11 +10,12 @@ function connectMongo(p_cbk) {
    p_cbk(err);
   } else {
    clientMongo = client;
-   
-  clientMongo.dropCollection("events", function(err, result) {
+   colMongoEvents = new mongodb.Collection(client, 'events');
+   p_cbk(null);
+  /*clientMongo.dropCollection("events", function(err, result) {
     colMongoEvents = new mongodb.Collection(client, 'events');
     p_cbk(null);
-   });
+   });*/
   }
  });
 }
@@ -44,12 +45,11 @@ function removeMongoEvents(p_cbk) {
 }
 
 function insertMongoEvent(p_cbk, uid, e) {
-//console.log(process.pid + " " + uid)
  var event = extend({}, e);
  event.uid = uid;
  colMongoEvents.insert(event, {
   w: 1
- }, function(err, res){
+ }, function(err, res){  
   if (p_cbk) {
    if (err) {
     console.log("Error in insertMongoEvent: " + err)

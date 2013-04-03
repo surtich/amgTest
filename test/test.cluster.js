@@ -1,8 +1,9 @@
 var cluster = require('cluster'),
+async	= require("async"),
 util = require('util');
 
 var activeWorkers = 0;
-var duration = -1;
+var durations = {};
 
 
 function work(settings) {
@@ -11,7 +12,7 @@ function work(settings) {
  }
  if (cluster.isMaster) {
   var forks = settings.forks || require('os').cpus().length;
-  console.log("forks="+forks);
+  console.log("forks="+forks); 
   var num = parseInt((settings.max - settings.first + 1) / forks, 10);
   for (var i = 0; i < forks ; i++) {
    var first = settings.first + i * num;
@@ -21,16 +22,16 @@ function work(settings) {
    });
    worker.on('message', function(data) {
     //console.log("pid=" + data.pid + ", duration=" + data.duration +"ms");
-    if (data.duration > duration) {
-	duration = data.duration;
+    if (durations[data.key] === undefined || data.duration > durations[data.key]) {
+     durations[data.key] = data.duration;
     }
    });
   }
   
   cluster.on('exit', function(worker, code, signal) {
    activeWorkers--;
-   if (activeWorkers === 0) {
-    console.log("Task: " + settings.label+". Elements: " + (settings.max - settings.first + 1) + ". Max duration: " + duration + "ms");
+   if (activeWorkers === 0) {        
+    console.log("Task: [" + settings.label+"] Elements: [" + (settings.max - settings.first + 1) + "] Max durations (in ms): " + util.inspect(durations));
     if (settings.cbk) {
      settings.cbk();
     }
@@ -42,23 +43,26 @@ function work(settings) {
   });
   
  } else {
-  var fn = doParallel;
-  if (settings.isSequential) {
-   fn = doSequential;
-  }
-  
-  var job = function(p_cbk) {
-   fn(settings.job, function() {
-    if (cluster.worker.kill) {
-     cluster.worker.kill();
-    } else {
-     cluster.worker.destroy();
-    }
-    p_cbk();
-   }, settings.params);
-  };
-  
-  stats(job);
+  async.forEachSeries(settings.jobs, function(job, p_cbk) {   
+   
+   var fn = doParallel;
+   if (job.isSequential) {
+    fn = doSequential;
+   }
+
+   stats(job.fn.name, function(after) {
+    fn(job.fn, function() {
+     after();
+     p_cbk();
+    }, settings.params);
+   });
+  }, function(err) {
+   if (cluster.worker.kill) {
+    cluster.worker.kill();
+   } else {
+    cluster.worker.destroy();
+   };
+  });
  }
 }
 
@@ -95,12 +99,16 @@ function doParallel(fn, p_cbk, params) {
  }
 }
 
-function stats(job) {
+function stats(key, job) {
  var start = new Date().getTime();
  job (function () {
   var end = new Date().getTime();
   var duration = end - start;
-  process.send({duration: duration, pid: process.pid});
+  process.send({
+   duration: duration,   
+   pid: process.pid,
+   key: key
+  });
  });
 }
 

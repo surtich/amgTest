@@ -1,6 +1,7 @@
 var redis	= require("redis"),
 async	= require("async"),
-util	= require("util")
+util	= require("util"),
+cluster = require('cluster'),
 event = require('./jsonEvents'),
 mongoTest = require('./test.mongo'),
 redisTest = require('./test.redis'),
@@ -8,21 +9,23 @@ ramTest = require('./test.ram'),
 mysqlTest = require('./test.mysql'),
 clusterTest = require('./test.cluster');
 
-var numEvents = 7;
-var first = 3;
+var numEvents = 1000;
+var first = 1;
 var forks = undefined;
 
 var activeWorkers = 0;
 
 tasks();
 
-function job(fn, p_cbk, label, myEvent) {
+var jobs = [];
+
+function job(fns, p_cbk, label, myEvent) {
  clusterTest.work({
   cbk: p_cbk, 
   forks: forks,
   first: first,
   max: first + numEvents - 1 ,
-  job: fn,
+  jobs: fns,
   label: label,
   params: myEvent || event.small
  });
@@ -66,7 +69,15 @@ function tasks() {
    init(done);
   },
   function(done) {
-   mongoTasks(done);
+   preTasks(done);
+  },
+  function(done) {
+   jobs.push({fn: mongoTest.insertMongoEvent});
+   jobs.push({fn: mongoTest.getMongoEvent});
+   job(jobs, done, 'MongoDB tests');
+  },
+  function(done) {
+   postTasks(done);
   }
  ],function (err, results) {
    if (err) {
@@ -76,26 +87,39 @@ function tasks() {
   });
 }
 
-function x(p_cbk,i,z) {
-    console.log("aqui="+process.pid);
-    console.log(z);
-    p_cbk();
-  }
-
-function mongoTasks(p_cbk) {
+function preTasks(p_cbk) {
  async.series([
   function(done) {
    mongoTest.connectMongo(done);
   },
   function(done) {
-   mongoTest.removeMongoEvents(done);
+   if (cluster.isMaster) {
+    mongoTest.removeMongoEvents(done);
+   } else {
+    done();
+   }
   },
   function(done) {
-   mongoTest.addIndexMongo(done);
+   if (cluster.isMaster) {
+    mongoTest.addIndexMongo(done);
+   } else {
+    done();
+   }
   },
   function(done) {
-   job(mongoTest.insertMongoEvent, done, 'This is a test');
-  },
+   mongoTest.closeMongo(done);
+  }
+ ],function (err, results) {
+   if (err) {
+    console.log("EXIT WITH ERRORS: " + err);
+   }
+   p_cbk();
+  });
+}
+
+
+function postTasks(p_cbk) {
+ async.series([  
   function(done) {
    mongoTest.closeMongo(done);
   }
