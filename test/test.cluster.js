@@ -43,13 +43,13 @@ function work(settings) {
   });
   
  } else {
-  async.forEachSeries(settings.jobs, function(job, p_cbk) {   
+  async.forEachSeries(settings.jobs, function(job, done) {   
      
    var fn = job.multiplier || doParallel;
 
-   stats(job.fn.name, function(after) {
+   stats(job.fn.name, function(p_cbk) {
     fn(job.fn, function() {
-     after(p_cbk);
+     p_cbk(done);
     }, job.params);
    });
   }, function(err) {
