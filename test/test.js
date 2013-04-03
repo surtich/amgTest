@@ -9,25 +9,33 @@ ramTest = require('./test.ram'),
 mysqlTest = require('./test.mysql'),
 clusterTest = require('./test.cluster');
 
-var numEvents = 1000;
+var numEvents = 100000;
 var first = 1;
 var forks = undefined;
 
-var activeWorkers = 0;
+var doMongoTests = true;
+var doRedisTests = true;
+var doMySQLTests = true;
+
+var writeTests = true;
+var readTests = true;
+
+var jobs = [];
+var preJobs = [];
+var postJobs = [];
 
 tasks();
 
-var jobs = [];
 
-function job(fns, p_cbk, label, myEvent) {
+
+function job(fns, p_cbk, label) {
  clusterTest.work({
   cbk: p_cbk, 
   forks: forks,
   first: first,
   max: first + numEvents - 1 ,
   jobs: fns,
-  label: label,
-  params: myEvent || event.small
+  label: label
  });
 }
 
@@ -50,6 +58,33 @@ function init(p_cbk) {
    if ( param !== null ) {
     forks = parseInt(param, 10);
    }
+
+   param = getParam("-write=", val);
+   if ( param !== null ) {
+    writeTests = param.toLowerCase() === "yes";
+   }
+   
+   param = getParam("-read=", val);
+   if ( param !== null ) {
+    readTests = param.toLowerCase() === "yes";
+   }
+
+   param = getParam("-mongo=", val);
+   if ( param !== null ) {
+    doMongoTests = param.toLowerCase() === "yes";
+   }
+   
+   param = getParam("-redis=", val);
+   if ( param !== null ) {
+    doRedisTests = param.toLowerCase() === "yes";
+   }
+   
+   param = getParam("-mysql=", val);
+   if ( param !== null ) {
+    doMySQLTests = param.toLowerCase() === "yes";
+   }
+
+
   }
   );
  p_cbk();
@@ -67,66 +102,128 @@ function tasks() {
  async.series([
   function(done) {
    init(done);
+  },function(done) {
+   prepare(done);
   },
   function(done) {
-   preTasks(done);
+   async.forEachSeries(preJobs, function(task, p_cbk) {  
+    task(p_cbk);
+   }, function (err) {
+    done(err);
+   }
+   );
   },
   function(done) {
-   jobs.push({fn: mongoTest.insertMongoEvent});
-   jobs.push({fn: mongoTest.getMongoEvent});
-   job(jobs, done, 'MongoDB tests');
+   job(jobs, done, 'Tests');
   },
+  
   function(done) {
-   postTasks(done);
+   async.forEachSeries(postJobs, function(task, p_cbk) {
+    task(p_cbk);
+   },function (err) {
+    done(err);
+   }
+   );
   }
- ],function (err, results) {
+  ],function (err, results) {
    if (err) {
     console.log("EXIT WITH ERRORS: " + err);
    }
    return;
   });
+} 
+
+function prepare(done) {
+ if (doMongoTests) {
+  prepareMongoDB();
+ }
+ 
+ if (doRedisTests) {
+  prepareRedis();
+ }
+
+ if (doMySQLTests) {
+  prepareMySQL();
+ }
+ 
+ done();
 }
 
-function preTasks(p_cbk) {
- async.series([
-  function(done) {
-   mongoTest.connectMongo(done);
-  },
-  function(done) {
-   if (cluster.isMaster) {
-    mongoTest.removeMongoEvents(done);
-   } else {
-    done();
-   }
-  },
-  function(done) {
-   if (cluster.isMaster) {
-    mongoTest.addIndexMongo(done);
-   } else {
-    done();
-   }
-  },
-  function(done) {
-   mongoTest.closeMongo(done);
+function prepareMongoDB() {
+ preJobs.push(mongoTest.connectMongo);
+
+ if (cluster.isMaster) {
+  if (writeTests) {
+   preJobs.push(mongoTest.removeMongoEvents);
   }
- ],function (err, results) {
-   if (err) {
-    console.log("EXIT WITH ERRORS: " + err);
-   }
-   p_cbk();
+  preJobs.push(mongoTest.addIndexMongo);
+ }
+ 
+ if (writeTests) {
+  jobs.push({
+   fn: mongoTest.insertMongoEvent,
+   params: event.small
   });
+ }
+ 
+ if (readTests) {
+  jobs.push({
+   fn: mongoTest.getMongoEvent,
+   params: event.small
+  });
+ }
+ 
+ postJobs.push(mongoTest.closeMongo);
 }
 
+function prepareRedis() {
+ preJobs.push(redisTest.connectRedis);
 
-function postTasks(p_cbk) {
- async.series([  
-  function(done) {
-   mongoTest.closeMongo(done);
+ if (cluster.isMaster) {
+  if (writeTests) {
+   preJobs.push(redisTest.removeRedisEvents);
   }
- ],function (err, results) {
-   if (err) {
-    console.log("EXIT WITH ERRORS: " + err);
-   }
-   p_cbk();
+ }
+ 
+ if (writeTests) {
+  jobs.push({
+   fn: redisTest.insertRedisEvent,
+   params: JSON.stringify(event.small)
   });
+ }
+ 
+ if (readTests) {
+  jobs.push({
+   fn: redisTest.getRedisEvent,
+   params: JSON.stringify(event.small)
+  });
+ }
+ 
+ postJobs.push(redisTest.closeRedis);
+}
+
+function prepareMySQL() {
+ preJobs.push(mysqlTest.connectMySQL);
+
+ if (cluster.isMaster) {
+  if (writeTests) {
+   preJobs.push(mysqlTest.removeMySQLEvents);
+  }
+ }
+ 
+ if (writeTests) {
+  jobs.push({
+   fn: mysqlTest.insertMySQLEvent,
+   params: JSON.stringify(event.small)
+  });
+ }
+ 
+ if (readTests) {
+  jobs.push({
+   fn: mysqlTest.getMySQLEvent,
+   params: JSON.stringify(event.small)
+  });
+ }
+ 
+ postJobs.push(mysqlTest.closeMySQL);
 }

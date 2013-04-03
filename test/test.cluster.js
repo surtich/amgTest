@@ -44,8 +44,8 @@ function work(settings) {
   
  } else {
   async.forEachSeries(settings.jobs, function(job, p_cbk) {   
-   
-   var fn = doParallel;
+     
+   var fn = job.multiplier || doParallel;
    if (job.isSequential) {
     fn = doSequential;
    }
@@ -54,7 +54,7 @@ function work(settings) {
     fn(job.fn, function() {
      after();
      p_cbk();
-    }, settings.params);
+    }, job.params);
    });
   }, function(err) {
    if (cluster.worker.kill) {

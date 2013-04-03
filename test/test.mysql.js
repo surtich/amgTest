@@ -6,8 +6,8 @@ function connectMySQL(p_cbk) {
  clientMySQL = mysql.createPool({
   host: 'localhost',
   database: 'agm',
-  user: 'root',
-  password: '1'
+  user: 'root'
+  //,password: '1'
  });
  p_cbk();
 }
