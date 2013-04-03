@@ -49,8 +49,7 @@ function work(settings) {
 
    stats(job.fn.name, function(after) {
     fn(job.fn, function() {
-     after();
-     p_cbk();
+     after(p_cbk);
     }, job.params);
    });
   }, function(err) {
@@ -98,7 +97,7 @@ function doParallel(fn, p_cbk, params) {
 
 function stats(key, job) {
  var start = new Date().getTime();
- job (function () {
+ job (function (p_cbk) {
   var end = new Date().getTime();
   var duration = end - start;
   process.send({
@@ -106,6 +105,7 @@ function stats(key, job) {
    pid: process.pid,
    key: key
   });
+  p_cbk();
  });
 }
 
